@@ -153,22 +153,22 @@ GUI: recommend_callback()
   ├─ Extract selected dataframe
   └─ Call advisor_core.recommend(catalog_uri, catalog_mime, student_md, term)
      ↓
-     Step 1: Transcript Analysis
+     Step 1: Transcript Analysis (~15–20s)
      ├─ Create prompt: transcript + catalog reference
      ├─ Call Gemini with catalog_uri (PDF)
      └─ Receive: plain text analysis (prerequisites, GPA, credit limit)
      ↓
-     Step 2: Catalog Filtering
+     Step 2: Catalog Filtering (~15–20s)
      ├─ Create prompt: Step 1 output + catalog reference + "find eligible courses"
      ├─ Call Gemini with catalog_uri (PDF)
      └─ Receive: plain text list (course code, prerequisites met, proof quote)
      ↓
-     Step 3: JSON Generation
+     Step 3: JSON Generation (~15–20s)
      ├─ Create prompt: Steps 1–2 + "output as JSON"
      ├─ Call Gemini with response_mime_type="application/json"
      └─ Receive: JSON array [{ course_code, course_title, ..., justification, catalog_availability_proof }, ...]
      ↓
-     Validation
+     Validation (~1s)
      ├─ Parse JSON
      ├─ Validate each field (type, non-empty)
      ├─ Optional: check course codes against catalog summary
@@ -177,7 +177,7 @@ GUI: recommend_callback()
 GUI: Display results in table or save to JSON file
 ```
 
-### Batch All Students
+### Batch All Students (Sequential)
 ```
 User: Select sheets + click "Start Batch"
   ↓
@@ -187,8 +187,8 @@ advisor_core.py: batch_all(catalog_uri, catalog_mime, sheets, term)
   ├─ Convert sheets dict to list of (sheet_name, df) tuples
   ├─ Call recommend_students() for all
   │  └─ For each (sheet, df):
-  │     ├─ Call recommend() (same 3-step flow)
-  │     ├─ Pause REQUEST_DELAY seconds (1.5s)
+  │     ├─ Call recommend() (same 3-step flow: ~45–60s per student)
+  │     ├─ Pause REQUEST_DELAY seconds (1.5s between students)
   │     └─ Accumulate results
   ├─ Create two output files:
   │  ├─ batch_summary.json   [{ sheet, recommended_courses: [titles_only] }, ...]
@@ -275,7 +275,7 @@ class KeyPool:
 
 ### 2. **3-Step Chain-of-Thought**
 - **Why**: Breaking into steps improves model accuracy (avoids hallucination at each stage)
-- **Trade-off**: 3 API calls per student (vs. 1) but much higher quality
+- **Trade-off**: 3 API calls per student (~45–60s) but much higher quality
 
 ### 3. **KeyPool Rotation**
 - **Why**: Gemini has per-key rate limits; multiple keys allow continuous operation
@@ -293,9 +293,10 @@ class KeyPool:
 - **Why**: Gemini can produce malformed JSON; validating early catches errors
 - **Benefit**: Guarantees downstream consumers always get valid, typed data
 
-### 7. **Request Delay in Batch**
-- **Why**: Gemini enforces rate limits even with multiple keys; 1.5s delay prevents 429 errors
-- **Trade-off**: Batch of 100 students takes ~2.5 minutes (but reliable)
+### 7. **Sequential Batch Processing (Current)**
+- **Why**: Reliable, predictable, avoids 429 errors even with multiple keys
+- **Trade-off**: Slow for large batches (100 students = ~76–90 minutes)
+- **Future**: Phase 2 will add async with `asyncio.Semaphore` (3–5 concurrent) for 10–15x speedup
 
 ---
 
@@ -330,10 +331,33 @@ IOError (.env read)     → Ignore; continue with env vars
 |---|---|---|
 | Load Excel (100 rows) | ~100ms | depends on engine (xlrd vs openpyxl) |
 | Search (100 columns) | ~50ms | normalized substring match |
-| Recommend (single) | ~30–60s | 3 Gemini calls + waiting |
-| Batch (100 students) | ~2.5min | 100 × 30s + 1.5s delays |
+| Single recommendation | ~45–60s | 3 Gemini calls (~15–20s each) + network latency |
+| Batch (10 students) | ~7–8 min | (45s × 10) + (1.5s × 9 delays) |
+| **Batch (100 students)** | **~76–90 min** | (45s × 100) + (1.5s × 99 delays) — **sequential** |
+| Batch (100 students, async) | ~15–20 min | **Phase 2 goal** (5 concurrent @ 3 keys) |
 | Catalog upload (10MB PDF) | ~10–30s | depends on file size + Gemini load |
 | Catalog caching (on hit) | ~0ms | instant URI lookup |
+
+---
+
+## Scalability Roadmap
+
+### Current (Phase 1)
+- ✅ Sequential batch processing (reliable, simple)
+- ✅ Single-threaded with 1.5s delays
+- ⚠️ Suitable for: <50 students (< 1 hour), demo scenarios
+
+### Phase 2 (Planned)
+- 🎯 Async batch with `asyncio.Semaphore(5)`
+- 🎯 Up to 5 concurrent requests (1 per key for 5 keys)
+- 🎯 100-student batch in ~15–20 minutes
+- 🎯 Requirements: Minimal changes to `recommend()`, add `async` wrapper
+
+### Phase 3+ (Future)
+- 🚀 Distributed processing (multiple machines)
+- 🚀 Queue-based batch submission (Celery + Redis)
+- 🚀 WebSocket progress updates for large batches
+- 🚀 Suitable for: institutional deployments (1000+ students)
 
 ---
 
@@ -350,9 +374,10 @@ IOError (.env read)     → Ignore; continue with env vars
 - **Catalog PDF**: Uploaded once, cached URI reused (expires after 2 hours)
 
 ### Recommendations
-- [ ] Encrypt `.env` at rest
+- [ ] Encrypt `.env` at rest (e.g., with `python-dotenv-vault`)
 - [ ] Use short-lived API keys (rotate weekly)
 - [ ] Audit Gemini audit logs for unauthorized access
+- [ ] Document data retention policies
 
 ---
 
@@ -365,6 +390,7 @@ IOError (.env read)     → Ignore; continue with env vars
 - test_column_category()            → verify heuristic classifier
 - test_find_students()              → verify search accuracy
 - test_validate_course_object()     → verify JSON schema validation
+- test_keypool_rotation()           → verify key rotation logic
 ```
 
 ### Integration Tests
@@ -373,6 +399,7 @@ IOError (.env read)     → Ignore; continue with env vars
 - test_end_to_end_single_student()  → full recommend() flow
 - test_batch_with_multiple_sheets() → batch_all() with error handling
 - test_catalog_cache_hit_miss()     → cache verification flow
+- test_arabic_search_normalization()→ Arabic query variants
 ```
 
 ### Manual Tests (before release)
@@ -380,6 +407,8 @@ IOError (.env read)     → Ignore; continue with env vars
 - [ ] Search with Arabic query (multiple variations)
 - [ ] Batch all students (with key rotation)
 - [ ] Verify JSON output format
+- [ ] Test with large PDFs (> 50MB)
+- [ ] Test with 100+ student batches
 
 ---
 
@@ -388,20 +417,23 @@ IOError (.env read)     → Ignore; continue with env vars
 ### Short Term (Phase 1)
 - [ ] Config file (`config.yaml`) externalize constants
 - [ ] Response schema enforcement (strict JSON typing at API level)
-- [ ] Unit test suite
+- [ ] Unit test suite with >80% coverage
 
 ### Medium Term (Phase 2)
+- [ ] Async batch with `asyncio.Semaphore` (5 concurrent)
 - [ ] Web UI (FastAPI + React)
 - [ ] RAG with ChromaDB (chunk catalog, embed, retrieve)
 - [ ] SQLite history (track sessions, re-run, diff)
-- [ ] Async batch with `asyncio.Semaphore` (3–5 concurrent)
+- [ ] Prerequisite graph visualization (NetworkX + matplotlib)
 
 ### Long Term (Phase 3+)
 - [ ] Fine-tuning on past advisor decisions
 - [ ] Graduation timeline prediction
 - [ ] At-risk student detection
-- [ ] SIS API integration
+- [ ] SIS API integration (Canvas, Banner, etc.)
 - [ ] Automated email + PDF reports
+- [ ] Role-based access (advisor vs. student)
+- [ ] Docker deployment
 
 ---
 
@@ -411,3 +443,4 @@ IOError (.env read)     → Ignore; continue with env vars
 - [Gemini Files API](https://ai.google.dev/api/files)
 - [Pandas Documentation](https://pandas.pydata.org/)
 - [Tkinter Guide](https://docs.python.org/3/library/tkinter.html)
+- [PEP 8 Style Guide](https://www.python.org/dev/peps/pep-0008/)
