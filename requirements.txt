@@ -1,0 +1,6 @@
+google-genai
+pandas
+openpyxl
+xlrd
+tabulate
+tkinterdnd2   # optional — enables drag-and-drop in the GUI
