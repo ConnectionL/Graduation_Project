@@ -4,3 +4,6 @@ openpyxl
 xlrd
 tabulate
 tkinterdnd2   # optional — enables drag-and-drop in the GUI
+fastapi
+uvicorn[standard]
+python-multipart  # required for FastAPI file uploads

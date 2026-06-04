@@ -1,0 +1,88 @@
+[
+  {
+    "sheet": "أحمد محمد علي خ",
+    "recommended_courses": [
+      "Optimization Methods",
+      "Computer Security",
+      "Cloud Computing",
+      "Capstone Project II",
+      "Parallel Computing",
+      "Soft Computing Techniques",
+      "Human-Computer Interaction"
+    ]
+  },
+  {
+    "sheet": "فاطمة يوسف إبرا",
+    "recommended_courses": [
+      "Optimization Methods",
+      "Computer Security",
+      "Cloud Computing",
+      "Capstone Project II",
+      "Parallel Computing",
+      "Advanced High-Performance Computing",
+      "Big Data Programming"
+    ]
+  },
+  {
+    "sheet": "محمد عمر عبدالل",
+    "recommended_courses": [
+      "Optimization Methods",
+      "Computer Security",
+      "Cloud Computing",
+      "Capstone Project II",
+      "Parallel Computing",
+      "Soft Computing Techniques"
+    ]
+  },
+  {
+    "sheet": "نور الهدى طارق ",
+    "recommended_courses": [
+      "Optimization Methods",
+      "Computer Security",
+      "Cloud Computing",
+      "Capstone Project II",
+      "Parallel Computing",
+      "Soft Computing Techniques",
+      "Human-Computer Interaction"
+    ]
+  },
+  {
+    "sheet": "عمر خالد مصطفى ",
+    "recommended_courses": [
+      "Capstone Project II",
+      "Optimization Methods",
+      "Computer Security",
+      "Cloud Computing",
+      "Parallel Computing",
+      "Soft Computing Techniques"
+    ]
+  },
+  {
+    "sheet": "سارة عادل رضا م",
+    "recommended_courses": [
+      "Optimization Methods",
+      "Computer Security",
+      "Cloud Computing",
+      "Capstone Project II",
+      "Parallel Computing",
+      "Soft Computing Techniques",
+      "Human-Computer Interaction"
+    ]
+  },
+  {
+    "sheet": "كريم وليد سمير ",
+    "error": "All 1 key(s) failed on Step1/Transcript for كريم وليد سمير  | كلية الحاسبات والذكاء الاصطناعى (ID: Unknown)."
+  },
+  {
+    "sheet": "منى حسن علي فار",
+    "error": "All 1 key(s) failed on Step1/Transcript for منى حسن علي فار | كلية الحاسبات والذكاء الاصطناعى (ID: Unknown)."
+  },
+  {
+    "sheet": "يوسف أشرف نبيل ",
+    "error": "All 1 key(s) failed on Step1/Transcript for يوسف أشرف نبيل  | كلية الحاسبات والذكاء الاصطناعى (ID: Unknown)."
+  },
+  {
+    "sheet": "لينا رامي شريف ",
+    "error": "All 1 key(s) failed on Step1/Transcript for لينا رامي شريف  | كلية الحاسبات والذكاء الاصطناعى (ID: Unknown)."
+  }
+]

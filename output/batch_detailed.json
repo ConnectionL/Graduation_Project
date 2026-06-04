@@ -1,0 +1,392 @@
+[
+  {
+    "student_id": "Unknown",
+    "name_english": "كلية الحاسبات والذكاء الاصطناعى",
+    "name_arabic": "Unknown",
+    "sheet": "أحمد محمد علي خ",
+    "term": "Student's upcoming term",
+    "recommended_courses": [
+      {
+        "course_code": "SC x51",
+        "course_title": "Optimization Methods",
+        "course_title_in_arabic": "طرق الأمثلية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI 301 (Passed with Grade B / 3.0 Points)",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) ... - SC x51: Optimization Methods | 3 Credits"
+      },
+      {
+        "course_code": "CS x71",
+        "course_title": "Computer Security",
+        "course_title_in_arabic": "أمن الحاسب",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213 (Passed with Grade A+ / 4.0 Points)",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) ... - CS x71: Computer Security | 3 Credits"
+      },
+      {
+        "course_code": "CS 433",
+        "course_title": "Cloud Computing",
+        "course_title_in_arabic": "الحوسبة السحابية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 231 (Passed with Grade B / 3.0 Points)",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) ... - CS 433: Cloud Computing | 3 Credits"
+      },
+      {
+        "course_code": "PR 402",
+        "course_title": "Capstone Project II",
+        "course_title_in_arabic": "مشروع التخرج 2",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: PR 401 (Passed with Grade A+ / 4.0 Points)",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) ... - PR 402: Capstone Project II | 3 Credits"
+      },
+      {
+        "course_code": "SC x62",
+        "course_title": "Parallel Computing",
+        "course_title_in_arabic": "الحوسبة المتوازية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: SC x61 (Passed with Grade A+ / 4.0 Points)",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) ... - Elective 5 | 3 Credits ... - Elective 6 | 3 Credits"
+      },
+      {
+        "course_code": "SC x63",
+        "course_title": "Soft Computing Techniques",
+        "course_title_in_arabic": "تقنيات الحوسبة المرنة",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI x11 (Passed with Grade B+ / 3.3 Points)",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) ... - Elective 5 | 3 Credits ... - Elective 6 | 3 Credits"
+      },
+      {
+        "course_code": "CS x55",
+        "course_title": "Human-Computer Interaction",
+        "course_title_in_arabic": "التفاعل بين الإنسان والحاسب",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213 (Passed with Grade A+ / 4.0 Points)",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) ... - Elective 5 | 3 Credits ... - Elective 6 | 3 Credits"
+      }
+    ]
+  },
+  {
+    "student_id": "Unknown",
+    "name_english": "كلية الحاسبات والذكاء الاصطناعى",
+    "name_arabic": "Unknown",
+    "sheet": "فاطمة يوسف إبرا",
+    "term": "Student's upcoming term",
+    "recommended_courses": [
+      {
+        "course_code": "SC x51",
+        "course_title": "Optimization Methods",
+        "course_title_in_arabic": "طرق الأمثلية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI 301 (Artificial Intelligence passed with Grade B). This is a compulsory major requirement.",
+        "catalog_availability_proof": "- SC x51: Optimization Methods | 3 Credits"
+      },
+      {
+        "course_code": "CS x71",
+        "course_title": "Computer Security",
+        "course_title_in_arabic": "أمن الحاسب",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213 (Design and Analysis of Algorithms passed with Grade A+). This is a compulsory major requirement.",
+        "catalog_availability_proof": "- CS x71: Computer Security | 3 Credits"
+      },
+      {
+        "course_code": "CS 433",
+        "course_title": "Cloud Computing",
+        "course_title_in_arabic": "الحوسبة السحابية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 231 (Introduction to Computer Networks passed with Grade B). This is a compulsory major requirement.",
+        "catalog_availability_proof": "- CS 433: Cloud Computing | 3 Credits"
+      },
+      {
+        "course_code": "PR 402",
+        "course_title": "Capstone Project II",
+        "course_title_in_arabic": "مشروع التخرج 2",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: PR 401 (Capstone Project I passed with Grade A+). This is a compulsory graduation requirement.",
+        "catalog_availability_proof": "- PR 402: Capstone Project II | 3 Credits"
+      },
+      {
+        "course_code": "SC x62",
+        "course_title": "Parallel Computing",
+        "course_title_in_arabic": "الحوسبة المتوازية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: SC x61 (Distributed Computing passed with Grade A+). Satisfies Major Elective 4.",
+        "catalog_availability_proof": "- Elective 5 | 3 Credits"
+      },
+      {
+        "course_code": "SC x33",
+        "course_title": "Advanced High-Performance Computing",
+        "course_title_in_arabic": "الحوسبة عالية الأداء المتقدمة",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: SC 332 (High Performance Computing passed with Grade A+). Satisfies Major Elective 5.",
+        "catalog_availability_proof": "- Elective 6 | 3 Credits"
+      },
+      {
+        "course_code": "SC x73",
+        "course_title": "Big Data Programming",
+        "course_title_in_arabic": "برمجة البيانات الكبيرة",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: SC x72 (Big Data Analytics passed with Grade B+). Satisfies Major Elective 6.",
+        "catalog_availability_proof": "- Elective 6 | 3 Credits"
+      }
+    ]
+  },
+  {
+    "student_id": "Unknown",
+    "name_english": "كلية الحاسبات والذكاء الاصطناعى",
+    "name_arabic": "Unknown",
+    "sheet": "محمد عمر عبدالل",
+    "term": "Student's upcoming term",
+    "recommended_courses": [
+      {
+        "course_code": "SC x51",
+        "course_title": "Optimization Methods",
+        "course_title_in_arabic": "طرق الأمثلية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI 301 (Artificial Intelligence)",
+        "catalog_availability_proof": "- SC x51: Optimization Methods | 3 Credits under LEVEL 4 - SEMESTER 8 (18 Credit Hours) in the Scientific Computing (SC) study plan."
+      },
+      {
+        "course_code": "CS x71",
+        "course_title": "Computer Security",
+        "course_title_in_arabic": "أمن الحاسبات",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213 (Design and Analysis of Algorithms)",
+        "catalog_availability_proof": "- CS x71: Computer Security | 3 Credits under LEVEL 4 - SEMESTER 8 (18 Credit Hours) in the Scientific Computing (SC) study plan."
+      },
+      {
+        "course_code": "CS 433",
+        "course_title": "Cloud Computing",
+        "course_title_in_arabic": "الحوسبة السحابية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 231 (Introduction to Computer Networks)",
+        "catalog_availability_proof": "- CS 433: Cloud Computing | 3 Credits under LEVEL 4 - SEMESTER 8 (18 Credit Hours) in the Scientific Computing (SC) study plan."
+      },
+      {
+        "course_code": "PR 402",
+        "course_title": "Capstone Project II",
+        "course_title_in_arabic": "مشروع التخرج 2",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: PR 401 (Capstone Project I)",
+        "catalog_availability_proof": "- PR 402: Capstone Project II | 3 Credits under LEVEL 4 - SEMESTER 8 (18 Credit Hours) in the Scientific Computing (SC) study plan."
+      },
+      {
+        "course_code": "SC x62",
+        "course_title": "Parallel Computing",
+        "course_title_in_arabic": "الحوسبة المتوازية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: SC x61 (Distributed Computing)",
+        "catalog_availability_proof": "- Elective 5 | 3 Credits under LEVEL 4 - SEMESTER 8 (18 Credit Hours) in the Scientific Computing (SC) study plan."
+      },
+      {
+        "course_code": "SC x63",
+        "course_title": "Soft Computing Techniques",
+        "course_title_in_arabic": "تقنيات الحوسبة المرنة",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI x11 (Machine Learning)",
+        "catalog_availability_proof": "- Elective 6 | 3 Credits under LEVEL 4 - SEMESTER 8 (18 Credit Hours) in the Scientific Computing (SC) study plan."
+      }
+    ]
+  },
+  {
+    "student_id": "Unknown",
+    "name_english": "كلية الحاسبات والذكاء الاصطناعى",
+    "name_arabic": "Unknown",
+    "sheet": "نور الهدى طارق ",
+    "term": "Student's upcoming term",
+    "recommended_courses": [
+      {
+        "course_code": "SC x51",
+        "course_title": "Optimization Methods",
+        "course_title_in_arabic": "طرق الأمثلية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI 301 (Artificial Intelligence) passed with grade B.",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) - SC x51: Optimization Methods | 3 Credits"
+      },
+      {
+        "course_code": "CS x71",
+        "course_title": "Computer Security",
+        "course_title_in_arabic": "أمن الحاسب",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213 (Design and Analysis of Algorithms) passed with grade A+.",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) - CS x71: Computer Security | 3 Credits"
+      },
+      {
+        "course_code": "CS 433",
+        "course_title": "Cloud Computing",
+        "course_title_in_arabic": "الحوسبة السحابية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 231 (Introduction to Computer Networks) passed with grade B.",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) - CS 433: Cloud Computing | 3 Credits"
+      },
+      {
+        "course_code": "PR 402",
+        "course_title": "Capstone Project II",
+        "course_title_in_arabic": "مشروع التخرج 2",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: PR 401 (Capstone Project I) passed with grade A+.",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) - PR 402: Capstone Project II | 3 Credits"
+      },
+      {
+        "course_code": "SC x62",
+        "course_title": "Parallel Computing",
+        "course_title_in_arabic": "الحوسبة المتوازية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: SC x61 (Distributed Computing) passed with grade A+.",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) - Elective 5 | 3 Credits"
+      },
+      {
+        "course_code": "SC x63",
+        "course_title": "Soft Computing Techniques",
+        "course_title_in_arabic": "تقنيات الحوسبة المرنة",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI x11 (Machine Learning) passed with grade B+.",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) - Elective 6 | 3 Credits"
+      },
+      {
+        "course_code": "CS x55",
+        "course_title": "Human-Computer Interaction",
+        "course_title_in_arabic": "التفاعل بين الإنسان والحاسب",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213 (Design and Analysis of Algorithms) passed with grade A+.",
+        "catalog_availability_proof": "LEVEL 4 - SEMESTER 8 (18 Credit Hours) - Elective 5 | 3 Credits"
+      }
+    ]
+  },
+  {
+    "student_id": "Unknown",
+    "name_english": "كلية الحاسبات والذكاء الاصطناعى",
+    "name_arabic": "Unknown",
+    "sheet": "عمر خالد مصطفى ",
+    "term": "Student's upcoming term",
+    "recommended_courses": [
+      {
+        "course_code": "PR 402",
+        "course_title": "Capstone Project II",
+        "course_title_in_arabic": "مشروع التخرج 2",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: PR 401. This is a compulsory graduation requirement.",
+        "catalog_availability_proof": "PR 402: Capstone Project II | 3 Credits"
+      },
+      {
+        "course_code": "SC x51",
+        "course_title": "Optimization Methods",
+        "course_title_in_arabic": "طرق الأمثلية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI 301. This is a compulsory major requirement.",
+        "catalog_availability_proof": "SC x51: Optimization Methods | 3 Credits"
+      },
+      {
+        "course_code": "CS x71",
+        "course_title": "Computer Security",
+        "course_title_in_arabic": "أمن الحاسبات",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213. This is a compulsory major requirement.",
+        "catalog_availability_proof": "CS x71: Computer Security | 3 Credits"
+      },
+      {
+        "course_code": "CS 433",
+        "course_title": "Cloud Computing",
+        "course_title_in_arabic": "الحوسبة السحابية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 231. This is a compulsory major requirement.",
+        "catalog_availability_proof": "CS 433: Cloud Computing | 3 Credits"
+      },
+      {
+        "course_code": "SC x62",
+        "course_title": "Parallel Computing",
+        "course_title_in_arabic": "الحوسبة المتوازية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: SC x61. This is an eligible major elective.",
+        "catalog_availability_proof": "Elective 5 | 3 Credits"
+      },
+      {
+        "course_code": "SC x63",
+        "course_title": "Soft Computing Techniques",
+        "course_title_in_arabic": "تقنيات الحوسبة المرنة",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI x11. This is an eligible major elective.",
+        "catalog_availability_proof": "Elective 6 | 3 Credits"
+      }
+    ]
+  },
+  {
+    "student_id": "Unknown",
+    "name_english": "كلية الحاسبات والذكاء الاصطناعى",
+    "name_arabic": "Unknown",
+    "sheet": "سارة عادل رضا م",
+    "term": "Student's upcoming term",
+    "recommended_courses": [
+      {
+        "course_code": "SC x51",
+        "course_title": "Optimization Methods",
+        "course_title_in_arabic": "طرق التحسين",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI 301 (Passed with B)",
+        "catalog_availability_proof": "- SC x51: Optimization Methods | 3 Credits"
+      },
+      {
+        "course_code": "CS x71",
+        "course_title": "Computer Security",
+        "course_title_in_arabic": "أمن الحاسب",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213 (Passed with A+)",
+        "catalog_availability_proof": "- CS x71: Computer Security | 3 Credits"
+      },
+      {
+        "course_code": "CS 433",
+        "course_title": "Cloud Computing",
+        "course_title_in_arabic": "الحوسبة السحابية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 231 (Passed with B)",
+        "catalog_availability_proof": "- CS 433: Cloud Computing | 3 Credits"
+      },
+      {
+        "course_code": "PR 402",
+        "course_title": "Capstone Project II",
+        "course_title_in_arabic": "مشروع التخرج 2",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: PR 401 (Passed with A+)",
+        "catalog_availability_proof": "- PR 402: Capstone Project II | 3 Credits"
+      },
+      {
+        "course_code": "SC x62",
+        "course_title": "Parallel Computing",
+        "course_title_in_arabic": "الحوسبة المتوازية",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: SC x61 (Passed with A+)",
+        "catalog_availability_proof": "- Elective 5 | 3 Credits"
+      },
+      {
+        "course_code": "SC x63",
+        "course_title": "Soft Computing Techniques",
+        "course_title_in_arabic": "تقنيات الحوسبة المرنة",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: AI x11 (Passed with B+)",
+        "catalog_availability_proof": "- Elective 6 | 3 Credits"
+      },
+      {
+        "course_code": "CS x55",
+        "course_title": "Human-Computer Interaction",
+        "course_title_in_arabic": "التفاعل بين الإنسان والحاسب",
+        "credits": 3,
+        "justification": "Prerequisites satisfied: CS 213 (Passed with A+)",
+        "catalog_availability_proof": "- Elective 5 | 3 Credits"
+      }
+    ]
+  },
+  {
+    "sheet": "كريم وليد سمير ",
+    "error": "All 1 key(s) failed on Step1/Transcript for كريم وليد سمير  | كلية الحاسبات والذكاء الاصطناعى (ID: Unknown)."
+  },
+  {
+    "sheet": "منى حسن علي فار",
+    "error": "All 1 key(s) failed on Step1/Transcript for منى حسن علي فار | كلية الحاسبات والذكاء الاصطناعى (ID: Unknown)."
+  },
+  {
+    "sheet": "يوسف أشرف نبيل ",
+    "error": "All 1 key(s) failed on Step1/Transcript for يوسف أشرف نبيل  | كلية الحاسبات والذكاء الاصطناعى (ID: Unknown)."
+  },
+  {
+    "sheet": "لينا رامي شريف ",
+    "error": "All 1 key(s) failed on Step1/Transcript for لينا رامي شريف  | كلية الحاسبات والذكاء الاصطناعى (ID: Unknown)."
+  }
+]
