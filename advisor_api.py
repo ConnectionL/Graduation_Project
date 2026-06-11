@@ -246,7 +246,7 @@ def setup_status():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  POST /student/recommend
+#  POST /student/recommend  (async — returns immediately, processes in background)
 # ══════════════════════════════════════════════════════════════════════════════
 
 class RecommendRequest(BaseModel):
@@ -254,17 +254,22 @@ class RecommendRequest(BaseModel):
     term: str = "Next Term"
 
 
-@app.post("/student/recommend", summary="Get recommended courses for a student by their code")
+# In-memory task store: task_id → {status, result, error, ...}
+import uuid as _uuid
+
+_tasks: dict = {}
+_tasks_lock = threading.Lock()
+
+
+@app.post("/student/recommend", summary="Start recommendation (async — poll /student/recommend/status/{task_id})")
 def recommend(req: RecommendRequest):
     """
     Accepts:
       student_code — The student ID / code (same value stored in User.code on Laravel).
       term         — Target academic term (e.g. "Fall 2025"). Defaults to "Next Term".
 
-    Returns:
-      A list of recommended course objects:
-        course_code, course_title, course_title_in_arabic,
-        credits, justification, catalog_availability_proof
+    Returns immediately with a task_id. Poll GET /student/recommend/status/{task_id}
+    to get the result once processing is complete.
     """
     # ── Guard: setup must be ready ────────────────────────────────────────────
     if _state["status"] != "ready":
@@ -294,39 +299,99 @@ def recommend(req: RecommendRequest):
     sheet_name, df = matches[0]
     student_label  = core._student_label(df, sheet_name)
 
-    # ── Run the 3-step Gemini recommendation ─────────────────────────────────
-    try:
-        courses = core.recommend(
-            catalog_uri=None,          # we use condensed text, no URI needed
-            catalog_mime=None,
-            student_md=df.to_markdown(index=False),
-            term=req.term,
-            log=print,
-            student_label=student_label,
-            condensed_catalog_text=_condensed_text,
-            catalog_path=None,
-            validate_course_codes=False,
-            df=df,
-        )
-    except Exception as e:
+    # ── Check if there's already a running task for this student ──────────────
+    with _tasks_lock:
+        for tid, t in _tasks.items():
+            if t.get("student_code") == query and t.get("status") == "processing":
+                return _ok(
+                    {"task_id": tid, "status": "processing"},
+                    f"Already processing for {student_label}. Poll GET /student/recommend/status/{tid}.",
+                )
+
+    # ── Create task and process in background ─────────────────────────────────
+    task_id = str(_uuid.uuid4())[:8]
+    with _tasks_lock:
+        _tasks[task_id] = {
+            "status": "processing",
+            "student_code": query,
+            "student_label": student_label,
+            "sheet": sheet_name,
+            "term": req.term,
+            "result": None,
+            "error": None,
+        }
+
+    def _background():
+        try:
+            courses = core.recommend(
+                catalog_uri=None,
+                catalog_mime=None,
+                student_md=df.to_markdown(index=False),
+                term=req.term,
+                log=print,
+                student_label=student_label,
+                condensed_catalog_text=_condensed_text,
+                catalog_path=None,
+                validate_course_codes=False,
+                df=df,
+            )
+            with _tasks_lock:
+                _tasks[task_id]["status"] = "done"
+                _tasks[task_id]["result"] = {
+                    "student_code":        query,
+                    "student_label":       student_label,
+                    "sheet":               sheet_name,
+                    "term":                req.term,
+                    "recommended_courses": courses,
+                }
+        except Exception as e:
+            with _tasks_lock:
+                _tasks[task_id]["status"] = "error"
+                _tasks[task_id]["error"]  = str(e)
+
+    threading.Thread(target=_background, daemon=True).start()
+
+    return _ok(
+        {"task_id": task_id, "status": "processing"},
+        f"Recommendation started for {student_label}. Poll GET /student/recommend/status/{task_id}.",
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  GET /student/recommend/status/{task_id}
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/student/recommend/status/{task_id}", summary="Poll recommendation task status")
+def recommend_status(task_id: str):
+    """
+    Returns:
+      status — "processing" | "done" | "error"
+      result — Full recommendation data (only when status == "done")
+      error  — Error message (only when status == "error")
+    """
+    with _tasks_lock:
+        task = _tasks.get(task_id)
+
+    if not task:
+        _err(f"Task '{task_id}' not found.", 404)
+
+    if task["status"] == "done":
+        return _ok(task["result"], "Recommendations ready.")
+
+    if task["status"] == "error":
         raise HTTPException(
             status_code=500,
             detail={
                 "success": False,
-                "message": f"Recommendation engine failed: {e}",
-                "student_code": query,
+                "message": f"Recommendation failed: {task['error']}",
+                "student_code": task.get("student_code"),
             },
         )
 
+    # Still processing
     return _ok(
-        {
-            "student_code":        query,
-            "student_label":       student_label,
-            "sheet":               sheet_name,
-            "term":                req.term,
-            "recommended_courses": courses,
-        },
-        f"Recommendations generated for {student_label}.",
+        {"task_id": task_id, "status": "processing"},
+        "Still processing. Poll again in a few seconds.",
     )
 
 
@@ -337,3 +402,4 @@ def recommend(req: RecommendRequest):
 @app.get("/health", summary="Health check")
 def health():
     return {"status": "ok", "advisor_status": _state["status"]}
+
