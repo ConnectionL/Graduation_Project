@@ -11,9 +11,21 @@ Features:
   - Arabic search normalisation (NFC + substitution) – fast, robust
   - Optional catalog summarisation (Step 0) to reduce token usage
   - Optional post-recommendation validation against catalog codes
+  - Thread-safe KeyPool with reentrant lock
+  - Step 1.5: structured JSON extraction of CGPA, credit limit, passed courses
+  - Python-enforced credit cap and passed-course deduplication (trust-but-verify)
+  - Retry logic on catalog summarisation
+  - Word-boundary catalog code validation
+  - Progress callback wired through batch_all
 """
 
-import os, time, json, re, glob, unicodedata
+import os
+import time
+import json
+import re
+import glob
+import unicodedata
+import threading
 import pandas as pd
 from google import genai
 from google.genai import types
@@ -99,39 +111,57 @@ def _discover_keys() -> list:
 # ── API Key Pool ──────────────────────────────────────────────────────────────
 
 class KeyPool:
+    """Thread-safe round-robin API key pool with bad-key tracking."""
+
     def __init__(self, keys: list):
         self._keys  = list(keys)
         self._index = 0
         self._bad   = set()
+        self._lock  = threading.Lock()
+
     def current(self) -> str:
-        return self._keys[self._index % len(self._keys)]
+        with self._lock:
+            return self._keys[self._index % len(self._keys)]
+
     def current_name(self) -> str:
-        idx = self._index % len(self._keys)
-        return f"GEMINI_KEY_{idx + 1}"
-    def rotate(self, mark_bad: bool = False):
-        if mark_bad:
-            self._bad.add(self._index % len(self._keys))
-        self._index = (self._index + 1) % len(self._keys)
-    def get_client(self):
-        for _ in range(len(self._keys)):
+        with self._lock:
             idx = self._index % len(self._keys)
-            if idx not in self._bad:
-                return genai.Client(api_key=self._keys[idx])
-            self._index += 1
-        self._bad.clear()
-        return genai.Client(api_key=self.current())
+            return f"GEMINI_KEY_{idx + 1}"
+
+    def rotate(self, mark_bad: bool = False):
+        with self._lock:
+            if mark_bad:
+                self._bad.add(self._index % len(self._keys))
+            self._index = (self._index + 1) % len(self._keys)
+
+    def get_client(self):
+        with self._lock:
+            for _ in range(len(self._keys)):
+                idx = self._index % len(self._keys)
+                if idx not in self._bad:
+                    return genai.Client(api_key=self._keys[idx])
+                self._index += 1
+            # All keys marked bad — clear and try again
+            self._bad.clear()
+            return genai.Client(api_key=self._keys[self._index % len(self._keys)])
+
     def set_keys(self, keys: list, persist: bool = True):
-        self._keys  = list(keys)
-        self._index = 0
-        self._bad   = set()
+        with self._lock:
+            self._keys  = list(keys)
+            self._index = 0
+            self._bad   = set()
         if persist:
             save_env_file(keys)
+
     @property
     def keys(self) -> list:
-        return list(self._keys)
+        with self._lock:
+            return list(self._keys)
+
     @property
     def key_count(self) -> int:
-        return len(self._keys)
+        with self._lock:
+            return len(self._keys)
 
 pool = KeyPool(_discover_keys())
 
@@ -253,7 +283,17 @@ def get_or_upload_catalog(path: str, log=print, force: bool = False) -> tuple:
         client = _new_client()
         try:
             log(f"  Upload attempt {attempt}/{max_attempts} using {pool.current_name()}…")
-            fobj = client.files.upload(file=path)
+            # Use a safe ASCII display name — the HTTP layer cannot encode
+            # non-ASCII characters (e.g. Arabic) in headers/multipart metadata.
+            safe_name = "catalog.pdf"
+            with open(path, "rb") as _fh:
+                fobj = client.files.upload(
+                    file=_fh,
+                    config=types.UploadFileConfig(
+                        mime_type="application/pdf",
+                        display_name=safe_name,
+                    ),
+                )
             upload_error = None
             break
         except Exception as e:
@@ -344,6 +384,61 @@ def _normalize_arabic(text) -> str:
     text = re.sub(r'[\u064B-\u0652]', '', text)  # diacritics
     text = text.replace('\u0640', '')             # kashida
     return text
+
+def normalize_course_code(code: str) -> str:
+    """Canonical form of a course code for deduplication: lowercase, no spaces/dashes/underscores.
+
+    Examples:
+        'MATH-101'  → 'math101'
+        'MATH 101'  → 'math101'
+        'math101'   → 'math101'
+    """
+    if not isinstance(code, str):
+        code = str(code)
+    return re.sub(r'[\s\-_]', '', code).lower()
+
+def _extract_course_codes_from_df(df) -> list:
+    """Best-effort Python scan of the student DataFrame to collect every course
+    code visible in the transcript, regardless of grade.
+
+    Heuristic: a column whose name contains keywords like 'code', 'course',
+    'subject', 'رمز', 'مادة', or whose values look like typical course codes
+    (2-4 alpha chars followed by digits, optionally separated by dash/space)
+    is treated as a course-code column.
+
+    Returns a deduplicated list of normalised course codes.
+    """
+    CODE_PATTERN = re.compile(r'^[A-Za-z]{2,6}[\s\-_]?\d{2,4}[A-Za-z]?$')
+    CODE_COL_KEYWORDS = [
+        "code", "course", "subject", "رمز", "مادة", "كود المقرر",
+        "رمز المقرر", "رمز المادة",
+    ]
+
+    code_cols = []
+    for col in df.columns:
+        col_key = str(col).lower()
+        if any(k in col_key for k in CODE_COL_KEYWORDS):
+            code_cols.append(col)
+            continue
+        # Auto-detect: if ≥50 % of non-null values look like course codes
+        sample = df[col].dropna().astype(str).head(20)
+        if len(sample) == 0:
+            continue
+        matches = sum(1 for v in sample if CODE_PATTERN.match(v.strip()))
+        if matches / len(sample) >= 0.5:
+            code_cols.append(col)
+
+    seen: set = set()
+    codes: list = []
+    for col in code_cols:
+        for raw in df[col].dropna().astype(str):
+            raw = raw.strip()
+            if CODE_PATTERN.match(raw):
+                norm = normalize_course_code(raw)
+                if norm not in seen:
+                    seen.add(norm)
+                    codes.append(raw)  # keep original form for display
+    return codes
 
 # ── Student search (fast, robust) ────────────────────────────────────────────
 
@@ -570,16 +665,105 @@ Transcript:
 {student_md}
 """
 
-def _prompt_step2(term: str) -> str:
-    return f"""Excellent. Now, using your analysis above and the catalog PDF (or its summary), perform the following for every remaining required course:
+def _prompt_step1_5() -> str:
+    """Step 1.5 — extract hard facts as a small JSON object.
 
-1. **Exclude Non‑Standard Courses Immediately**: If a course is listed in the “Non‑Credit & Odd‑Credit Requirements” section of Step 1, or if it is 0 credits, field training, summer‑only, or does not count toward the credit limit, **discard it now**. Do NOT include it in any list. Only consider standard credit‑bearing courses that can be taken in the requested term.
-2. **Prerequisite Check**:
+    Sent immediately after Step 1's free-text analysis. The model has just
+    produced the analysis so it can accurately structure these numbers.
+    """
+    return """Based on your analysis above, output ONLY the following JSON object — no other text.
+
+{
+  "cgpa": <float, the student's current cumulative GPA>,
+  "credit_limit": <int, the maximum credit hours the student may take next term>,
+  "total_earned_credits": <int, credit hours the student has successfully completed so far>,
+  "total_required_credits": <int, total credit hours required to graduate>,
+  "passed_courses": ["<EXACT course code as it appears in the catalog>", ...]
+}
+
+Rules:
+- passed_courses must list EVERY course the student has passed (best-grade rule applied), using the exact catalog course code.
+- credit_limit must reflect the student's actual CGPA tier from the catalog (e.g. GPA < 2.0 → 12 hrs, GPA 2.0-2.99 → 15 hrs, GPA ≥ 3.0 → 18 hrs). Do NOT default to 18.
+- Output only valid JSON, no markdown fences, no explanation.
+"""
+
+def _parse_student_facts(raw_json: str, student_label: str) -> dict:
+    """Parse the Step 1.5 JSON into a student_facts dict.
+
+    Returns a safe default dict if parsing fails so downstream steps still work.
+    """
+    defaults = {
+        "cgpa": None,
+        "credit_limit": None,
+        "total_earned_credits": None,
+        "total_required_credits": None,
+        "passed_courses": [],
+    }
+    try:
+        cleaned = re.sub(r'^```(?:json)?\s*', '', raw_json.strip())
+        cleaned = re.sub(r'\s*```$', '', cleaned.strip())
+        # Accept both object and the object wrapped in an array
+        obj = json.loads(cleaned)
+        if isinstance(obj, list) and obj:
+            obj = obj[0]
+        if not isinstance(obj, dict):
+            return defaults
+        facts = {**defaults, **obj}
+        # Normalise types
+        try:
+            facts["cgpa"] = float(facts["cgpa"]) if facts["cgpa"] is not None else None
+        except (TypeError, ValueError):
+            facts["cgpa"] = None
+        for int_key in ("credit_limit", "total_earned_credits", "total_required_credits"):
+            try:
+                facts[int_key] = int(facts[int_key]) if facts[int_key] is not None else None
+            except (TypeError, ValueError):
+                facts[int_key] = None
+        if not isinstance(facts["passed_courses"], list):
+            facts["passed_courses"] = []
+        facts["passed_courses"] = [str(c).strip() for c in facts["passed_courses"] if c]
+        return facts
+    except Exception:
+        return defaults
+
+def _prompt_step2(term: str, student_facts: dict | None = None) -> str:
+    """Build the Step 2 prompt, optionally injecting hard constraints from Step 1.5."""
+    constraints = ""
+    if student_facts:
+        passed = student_facts.get("passed_courses", [])
+        limit  = student_facts.get("credit_limit")
+        cgpa   = student_facts.get("cgpa")
+        earned = student_facts.get("total_earned_credits")
+        total  = student_facts.get("total_required_credits")
+
+        parts = []
+        if cgpa is not None:
+            parts.append(f"Student CGPA: **{cgpa:.2f}**")
+        if limit is not None:
+            parts.append(f"Maximum credit hours allowed next term: **{limit} hours** (non-negotiable — dictated by CGPA tier in the catalog)")
+        if earned is not None and total is not None:
+            parts.append(f"Credits completed: **{earned} / {total}**")
+        if passed:
+            passed_list = ", ".join(passed)
+            parts.append(
+                f"Confirmed passed courses (NEVER recommend any of these under any code variation): **{passed_list}**"
+            )
+        if parts:
+            constraints = (
+                "\n\n**⚠ HARD CONSTRAINTS FROM STEP 1.5 (THESE OVERRIDE EVERYTHING ELSE):**\n"
+                + "\n".join(f"- {p}" for p in parts)
+                + "\n"
+            )
+
+    return f"""Excellent. Now, using your analysis above and the catalog PDF (or its summary), perform the following for every remaining required course:{constraints}
+
+1. **Exclude Non‑Standard Courses Immediately**: If a course is listed in the "Non‑Credit & Odd‑Credit Requirements" section of Step 1, or if it is 0 credits, field training, summer‑only, or does not count toward the credit limit, **discard it now**. Do NOT include it in any list. Only consider standard credit‑bearing courses that can be taken in the requested term.
+2. **Already Passed Check**:
+   - If the course (under ANY normalised form — 'MATH-101', 'MATH 101', 'MATH101' are the same) appears in the confirmed passed courses list above OR in your Step 1 Passed Courses, **discard it immediately and permanently**. The student has satisfied it.
+3. **Prerequisite Check**:
    - Locate the course in the catalog.
    - List its prerequisites.
    - Verify that ALL prerequisites appear in your "Passed Courses" list from Step 1. If any prerequisite is missing, discard this course.
-3. **Already Passed Check**:
-   - If the course (under any normalised form) appears in the "Passed Courses" list from Step 1, **discard it immediately** – the student has already satisfied it.
 4. **Semester Availability Check**:
    - In the catalog's study plan (the recommended schedule table), find exactly which semester(s) this course is offered.
    - Quote the **exact text** from the table that confirms it is offered in **{term}**.
@@ -592,16 +776,31 @@ def _prompt_step2(term: str) -> str:
 If no courses are eligible, explain why. Do not output JSON yet.
 """
 
-def _prompt_step3(term: str) -> str:
+def _prompt_step3(term: str, student_facts: dict | None = None) -> str:
+    """Build the Step 3 prompt with the credit limit injected as a hard number."""
+    credit_constraint = ""
+    if student_facts:
+        limit = student_facts.get("credit_limit")
+        cgpa  = student_facts.get("cgpa")
+        if limit is not None:
+            cgpa_str = f" (CGPA {cgpa:.2f})" if cgpa is not None else ""
+            credit_constraint = (
+                f"\n\n**⚠ HARD CREDIT LIMIT: The student may enrol in AT MOST {limit} credit hours"
+                f"{cgpa_str}. If the eligible courses total more than {limit} hours, remove"
+                f" lower-priority courses (electives before mandatory, later semesters before earlier)"
+                f" until the total is ≤ {limit}. This limit is absolute — do NOT exceed it.**\n"
+            )
+
     return f"""Now you have:
 - The list of passed courses and the credit limit from Step 1.
-- The filtered list of eligible courses from Step 2 (all standard credit‑bearing and offered in {term}).
+- The filtered list of eligible courses from Step 2 (all standard credit‑bearing and offered in {term}).{credit_constraint}
 
 **Your final task:**
 Convert the eligible courses into a JSON array. **Strict rules:**
 - Do NOT add any course that did not appear in your Step 2 list.
-- Exclude any course that is non‑credit, 0‑credit, field training, summer‑only, or does not count toward credit limit, as already removed in Steps 1‑2.
-- Apply the credit limit from Step 1: if the total credits of eligible courses exceed the limit, prioritise mandatory courses first, then earlier in the plan, until the limit is reached.
+- Do NOT include any course from the confirmed passed courses list.
+- Exclude any course that is non‑credit, 0‑credit, field training, summer‑only, or does not count toward credit limit.
+- The total credits of ALL recommended courses MUST NOT exceed the credit limit stated above.
 - Output **only** the JSON, no additional text or markdown.
 
 Format:
@@ -674,13 +873,24 @@ def _validate_course_list(courses, student_label: str):
     return [_validate_course_object(course, student_label) for course in courses]
 
 def _validate_against_catalog(courses, condensed_catalog_text: str, log=print) -> list:
+    """Discard courses whose code is not found in the catalog summary.
+
+    Uses word-boundary regex matching to prevent false positives such as
+    'CS-1' matching 'CS-10' or 'CS-100'.
+    """
     if not condensed_catalog_text or not courses:
         return courses
     catalog_text = condensed_catalog_text.lower()
     valid = []
     for c in courses:
         code = c.get("course_code", "").lower()
-        if code and code in catalog_text:
+        if not code:
+            log(f"  ⚠  Discarding course with empty code")
+            continue
+        # Word-boundary match: 'cs101' must not match 'cs1010'
+        pattern = r'(?<![a-z0-9])' + re.escape(normalize_course_code(code)) + r'(?![a-z0-9])'
+        normalized_catalog = normalize_course_code(catalog_text)
+        if re.search(pattern, normalized_catalog):
             valid.append(c)
         else:
             log(f"  ⚠  Discarding {c.get('course_code','unknown')} — code not found in catalog summary")
@@ -709,9 +919,35 @@ def recommend(
     log=print, student_label="student",
     condensed_catalog_text=None, catalog_path=None,
     validate_course_codes=False,
+    df=None,
 ) -> list:
+    """Run the full 4-step chain-of-thought recommendation pipeline for one student.
+
+    Args:
+        catalog_uri:            Gemini Files API URI of the uploaded catalog PDF.
+        catalog_mime:           MIME type of the catalog file.
+        student_md:             Student transcript rendered as a Markdown table string.
+        term:                   Upcoming term label (e.g. "Fall 2025", "Summer").
+        log:                    Callable used for progress messages (default: print).
+        student_label:          Human-readable name/ID used in log messages.
+        condensed_catalog_text: Optional pre-summarised catalog text (Step 0 output).
+        catalog_path:           Local path to the catalog PDF (used for re-upload on 403).
+        validate_course_codes:  If True, discard recommendations not found in catalog summary.
+        df:                     Optional raw student DataFrame — used for Python-side
+                                course-code pre-extraction (supplements Step 1.5).
+
+    Returns:
+        List of validated course dicts.
+    """
     max_attempts = pool.key_count + 1
     reupload_tried = False
+
+    # ── Python pre-extraction of course codes from the DataFrame ─────────────
+    # This gives us a deterministic list of codes visible in the transcript,
+    # which we merge with the model's Step 1.5 output.
+    python_course_codes: list = _extract_course_codes_from_df(df) if df is not None else []
+    if python_course_codes:
+        log(f"  🔎 Pre-scanned {len(python_course_codes)} course code(s) from transcript.")
 
     def _call_with_retry(conversation, expect_json, step_name):
         nonlocal catalog_uri, catalog_mime, reupload_tried
@@ -748,25 +984,61 @@ def recommend(
                 _close_client(client)
         raise RuntimeError(f"All {pool.key_count} key(s) failed on {step_name} for {student_label}.")
 
-    log(f"  📋 Step 1/3 — Analysing transcript for {student_label}…")
+    # ── Step 1: Free-text transcript analysis ────────────────────────────────
+    log(f"  📋 Step 1/4 — Analysing transcript for {student_label}…")
     s1_user  = _prompt_step1(student_md, term)
     s1_reply = _call_with_retry([{"role": "user", "text": s1_user}], False, "Step1/Transcript")
     log(f"  ✓ Step 1 complete ({len(s1_reply)} chars).")
 
-    log(f"  📖 Step 2/3 — Looking up eligible courses…")
-    s2_user  = _prompt_step2(term)
+    # ── Step 1.5: Structured JSON extraction (CGPA, credit limit, passed courses)
+    log(f"  🔢 Step 1.5/4 — Extracting structured facts…")
+    s1_5_user = _prompt_step1_5()
+    # Token optimisation: only send the Step 1 exchange (not student_md again)
+    # The model has just produced s1_reply so it has full context.
+    raw_facts = _call_with_retry([
+        {"role": "user",  "text": s1_user},
+        {"role": "model", "text": s1_reply},
+        {"role": "user",  "text": s1_5_user},
+    ], True, "Step1.5/Facts")
+    student_facts = _parse_student_facts(raw_facts, student_label)
+
+    # Merge Python-extracted codes into the model's passed_courses list
+    if python_course_codes:
+        existing_norm = {normalize_course_code(c) for c in student_facts["passed_courses"]}
+        for code in python_course_codes:
+            if normalize_course_code(code) not in existing_norm:
+                student_facts["passed_courses"].append(code)
+                existing_norm.add(normalize_course_code(code))
+
+    cgpa_str  = f"{student_facts['cgpa']:.2f}" if student_facts['cgpa'] is not None else "N/A"
+    limit_str = str(student_facts['credit_limit']) if student_facts['credit_limit'] is not None else "N/A"
+    log(f"  ✓ Step 1.5 complete — CGPA: {cgpa_str}, Credit limit: {limit_str} hrs, "
+        f"Passed courses: {len(student_facts['passed_courses'])}.")
+
+    # ── Step 2: Eligible course filtering ────────────────────────────────────
+    log(f"  📖 Step 2/4 — Looking up eligible courses…")
+    s2_user  = _prompt_step2(term, student_facts)
+    # Token optimisation: pass a compact summary of Step 1 rather than full text.
+    # We still include the raw s1_reply so the model can reference it, but we
+    # do NOT re-send the full student_md (already embedded in s1_user at Step 1).
     s2_reply = _call_with_retry([
         {"role": "user",  "text": s1_user},
         {"role": "model", "text": s1_reply},
+        {"role": "user",  "text": s1_5_user},
+        {"role": "model", "text": raw_facts},
         {"role": "user",  "text": s2_user},
     ], False, "Step2/Catalog")
     log(f"  ✓ Step 2 complete ({len(s2_reply)} chars).")
 
-    log(f"  🎯 Step 3/3 — Generating JSON…")
-    s3_user  = _prompt_step3(term)
+    # ── Step 3: JSON output ───────────────────────────────────────────────────
+    log(f"  🎯 Step 3/4 — Generating JSON…")
+    s3_user  = _prompt_step3(term, student_facts)
+    # Token optimisation: summarise Steps 1+1.5 into the facts JSON rather than
+    # re-sending the full free-text analysis. Step 2's reply is still included
+    # verbatim so the model knows exactly which courses are eligible.
     raw_json = _call_with_retry([
-        {"role": "user",  "text": s1_user},
-        {"role": "model", "text": s1_reply},
+        {"role": "user",  "text": s1_5_user},
+        {"role": "model", "text": raw_facts},
         {"role": "user",  "text": s2_user},
         {"role": "model", "text": s2_reply},
         {"role": "user",  "text": s3_user},
@@ -782,19 +1054,53 @@ def recommend(
         raise RuntimeError(f"Step 3 returned {type(courses).__name__} instead of a list.")
     courses = _validate_course_list(courses, student_label)
 
+    # ── Layer 3: Python-enforced passed-course deduplication ─────────────────
+    passed_norm = {normalize_course_code(c) for c in student_facts["passed_courses"]}
+    if passed_norm:
+        before_dedup = len(courses)
+        courses = [
+            c for c in courses
+            if normalize_course_code(c["course_code"]) not in passed_norm
+        ]
+        removed = before_dedup - len(courses)
+        if removed:
+            log(f"  ✓ Python filter removed {removed} already-passed course(s) the model included.")
+
+    # ── Layer 3: Python-enforced credit cap ──────────────────────────────────
+    credit_limit = student_facts.get("credit_limit")
+    if credit_limit is not None and credit_limit > 0:
+        total = sum(c["credits"] for c in courses)
+        if total > credit_limit:
+            log(f"  ⚠  Model returned {total} hrs which exceeds limit of {credit_limit} hrs. Trimming…")
+            # Sort: mandatory-looking courses first (heuristic: no "elective" in justification),
+            # then by position in list (earlier = earlier in study plan = higher priority).
+            def _priority(c):
+                j = c.get("justification", "").lower()
+                is_elective = any(w in j for w in ("elective", "optional", "اختياري"))
+                return (1 if is_elective else 0)
+            courses.sort(key=_priority)
+            kept, running = [], 0
+            for c in courses:
+                if running + c["credits"] <= credit_limit:
+                    kept.append(c)
+                    running += c["credits"]
+            log(f"  ✓ Trimmed to {len(kept)} course(s) totalling {running} hrs (limit: {credit_limit} hrs).")
+            courses = kept
+
     if validate_course_codes and condensed_catalog_text:
         before = len(courses)
         courses = _validate_against_catalog(courses, condensed_catalog_text, log=log)
         after = len(courses)
         if before != after:
             log(f"  ✓ Removed {before - after} course(s) not found in catalog summary.")
+
     log(f"  ✓ {len(courses)} recommendation(s) for {student_label}.")
     return courses
 
 def recommend_students(
     catalog_uri, catalog_mime, targets, term,
     log=print, condensed_catalog_text=None, catalog_path=None,
-    labels=None, validate_course_codes=False,
+    labels=None, validate_course_codes=False, progress=None,
 ) -> list:
     total = len(targets)
     if labels is not None and len(labels) != total:
@@ -804,6 +1110,8 @@ def recommend_students(
     log(f"  Starting {total} student recommendation(s) | term: {term}")
     log(f"{'─'*52}")
     for i, (sheet, df) in enumerate(targets):
+        if progress:
+            progress(i, total)
         label = labels[i] if labels else _student_label(df, sheet)
         log_label = f"{sheet} | {label}"
         log(f"\n[{i+1}/{total}] {log_label}")
@@ -811,7 +1119,8 @@ def recommend_students(
             courses = recommend(catalog_uri, catalog_mime,
                                 df.to_markdown(index=False), term, log, log_label,
                                 condensed_catalog_text, catalog_path,
-                                validate_course_codes=validate_course_codes)
+                                validate_course_codes=validate_course_codes,
+                                df=df)
             if labels:
                 results.append({
                     "identifier": f"{sheet} | {label}",
@@ -832,9 +1141,11 @@ def recommend_students(
         except Exception as e:
             log(f"  ✗ FAILED: {e}")
             results.append({"sheet": sheet, "error": str(e)})
-        if i < total:
+        if i < total - 1:
             log(f"  ⏸  Pausing {REQUEST_DELAY}s…")
             time.sleep(REQUEST_DELAY)
+    if progress:
+        progress(total, total)
     ok = sum(1 for r in results if "error" not in r)
     log(f"\n✓ {ok}/{total} succeeded.\n")
     return results
@@ -852,7 +1163,8 @@ def batch_all(
         catalog_uri, catalog_mime, targets, term,
         log=log, condensed_catalog_text=condensed_catalog_text,
         catalog_path=catalog_path, labels=None,
-        validate_course_codes=validate_course_codes)
+        validate_course_codes=validate_course_codes,
+        progress=progress)
     summary = []
     detailed = []
     for r in results:
@@ -890,26 +1202,32 @@ Include:
 
 Write in English, use structured sections, and be as detailed as necessary. Output as plain text, no markdown or JSON.
 """
-    client = _new_client()
-    try:
-        contents = [
-            types.Content(role="user", parts=[
-                types.Part.from_uri(file_uri=catalog_uri, mime_type=catalog_mime),
-                types.Part.from_text(text=prompt),
-            ])
-        ]
-        cfg = types.GenerateContentConfig(temperature=0.1, top_p=0.9)
-        log("📝 Requesting detailed catalog summary from Gemini (may take a minute) …")
-        resp = client.models.generate_content(model=MODEL_ID, contents=contents, config=cfg)
-        summary = resp.text.strip()
-    except Exception as e:
-        raise RuntimeError(f"Failed to summarise catalog: {e}")
-    finally:
-        _close_client(client)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(summary)
-    log(f"✓ Catalog summary saved to {output_path} ({len(summary)} chars)")
-    return summary
+    max_attempts = pool.key_count + 1
+    for attempt in range(1, max_attempts + 1):
+        key_name = pool.current_name()
+        log(f"📝 Requesting detailed catalog summary from Gemini (attempt {attempt}/{max_attempts} — key: {key_name}) …")
+        client = _new_client()
+        try:
+            contents = [
+                types.Content(role="user", parts=[
+                    types.Part.from_uri(file_uri=catalog_uri, mime_type=catalog_mime),
+                    types.Part.from_text(text=prompt),
+                ])
+            ]
+            cfg = types.GenerateContentConfig(temperature=0.1, top_p=0.9)
+            resp = client.models.generate_content(model=MODEL_ID, contents=contents, config=cfg)
+            summary = resp.text.strip()
+            
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(summary)
+            log(f"✓ Catalog summary saved to {output_path} ({len(summary)} chars)")
+            return summary
+        except Exception as e:
+            _handle_api_error(e, key_name, attempt, log)
+        finally:
+            _close_client(client)
+            
+    raise RuntimeError(f"Failed to summarise catalog after {max_attempts} attempts.")
 
 def _save_json(data, path):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)

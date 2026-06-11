@@ -293,6 +293,7 @@ def recommend(req: RecommendRequest):
             condensed_catalog_text=_condensed_text,
             catalog_path=None,
             validate_course_codes=False,
+            df=df,
         )
     except Exception as e:
         raise HTTPException(
