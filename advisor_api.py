@@ -50,11 +50,24 @@ def _save_state():
 
 
 def _load_state_from_disk():
-    """Restore state from disk on startup (survives hot-reloads)."""
+    """Restore state from disk on startup (survives hot-reloads).
+
+    If the file is corrupted or unreadable, silently reset to default state
+    and delete the bad file so the next save creates a clean one.
+    """
     global _state
     if os.path.exists(_STATE_FILE):
-        with open(_STATE_FILE, encoding="utf-8") as f:
-            _state = json.load(f)
+        try:
+            with open(_STATE_FILE, encoding="utf-8", errors="replace") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                _state = loaded
+        except Exception:
+            # Corrupted file — remove it so the next _save_state() starts clean
+            try:
+                os.remove(_STATE_FILE)
+            except OSError:
+                pass
 
 
 _load_state_from_disk()
