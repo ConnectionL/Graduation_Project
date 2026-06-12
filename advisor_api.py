@@ -376,7 +376,8 @@ def recommend_status(task_id: str):
         _err(f"Task '{task_id}' not found.", 404)
 
     if task["status"] == "done":
-        return _ok(task["result"], "Recommendations ready.")
+        result = {**task["result"], "status": "done"}
+        return _ok(result, "Recommendations ready.")
 
     if task["status"] == "error":
         raise HTTPException(
